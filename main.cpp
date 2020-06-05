@@ -2,6 +2,7 @@
 #include <thread> 
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
+#include <boost/filesystem.hpp>
 #include "net_bandwidth.hpp"
 
 using namespace std;
@@ -18,16 +19,21 @@ int main(int argc, char* argv[])
     desc.add_options()
         ("help", "print this help")
         ("list", "list NICs")
-        ("add", po::value<vector<string>>(), "add NIC to monitor [default: All]")
-        ("unit", po::value<string>(), "set Unit(Kb, KB, MB, GB) [default:KB]")
-        ("period", po::value<int>(), "set print period(in milisecond) [default:1000]")
-        ("duration", po::value<int>(), "set monitoring duration(in second) [default:-1]")
+        ("add", po::value<vector<string>>(), "add NIC to monitor [default: only physical]")
+        ("unit", po::value<string>(), "set Unit(Kb, KB, MB, GB) [default: KB]")
+        ("period", po::value<int>(), "set print period(in milisecond) [default: 1000]")
+        ("duration", po::value<int>(), "set monitoring duration(in second) [default: infinit]")
         ;
 
     ///////  Check Arguments ///////////////////////////
     po::variables_map vmap;
-    po::store(po::parse_command_line(argc, argv, desc), vmap);
-    po::notify(vmap);
+    try{
+        po::store(po::parse_command_line(argc, argv, desc), vmap);
+        po::notify(vmap);
+    }catch(std::exception& e){
+        cerr << "Exception: " << e.what() << '\n';
+        return -1;
+    }
     if(vmap.count("help")){
         std::cout << desc;
         return 0;
@@ -53,7 +59,8 @@ int main(int argc, char* argv[])
         }
     }else{
         for(const auto nic_str : System::get_interfaces()){
-            nics.emplace_back(nic_str);
+            if(boost::filesystem::exists("/sys/class/net/" + nic_str + "/device"))
+                nics.emplace_back(nic_str);
         }
     }
     if(vmap.count("period")){
@@ -64,25 +71,23 @@ int main(int argc, char* argv[])
     }
 
     ///////  Start Monitoring ///////////////////////////
-    long unit_div = (1<<10) / 8;
+    float unit_div = (1<<10) / 8;
     if(unit == Unit::KB) unit_div = (1<<10);
     else if(unit == Unit::MB) unit_div = (1<<20);
     else if(unit == Unit::GB) unit_div = (1<<30);
     time_t now = time(NULL);
-    cout << "Montor Network Interfaces:"
-         << "\n\t Duration: " << duration
-         << "\n\t Period: " << period
-         << "\n\t Unit: " << unit_str[size_t(unit)]
-         << "\n\t UnitDiv: " << unit_div
-         << "\n\t NICs: ";
+    cout << "\nDuration: " << duration
+         << "\nPeriod: " << period
+         << "\nUnit: " << unit_str[size_t(unit)]
+         << "\nNICs: ";
     for(auto& nic : nics){
         cout << nic.get_name() << ' ';
     }
-    cout << endl;
+    cout << "\n------------------------------" << endl;
     while(true){
         string line;
         for(auto& nic : nics){
-            auto out = boost::format("%5s(rx:%5u, rx:%5u)  ") 
+            auto out = boost::format("%5s(rx:%-5.3f, tx:%-5.3f) ") 
                         % nic.get_name()        
                         % (nic.get_rx() / unit_div)
                         % (nic.get_tx() / unit_div);
