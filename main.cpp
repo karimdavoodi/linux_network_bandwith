@@ -19,16 +19,21 @@ int main(int argc, char* argv[])
     desc.add_options()
         ("help", "print this help")
         ("list", "list NICs")
-        ("add", po::value<vector<string>>(), "add NIC to monitor [default: All]")
-        ("unit", po::value<string>(), "set Unit(Kb, KB, MB, GB) [default:KB]")
-        ("period", po::value<int>(), "set print period(in milisecond) [default:1000]")
-        ("duration", po::value<int>(), "set monitoring duration(in second) [default:-1]")
+        ("add", po::value<vector<string>>(), "add NIC to monitor [default: only physical]")
+        ("unit", po::value<string>(), "set Unit(Kb, KB, MB, GB) [default: KB]")
+        ("period", po::value<int>(), "set print period(in milisecond) [default: 1000]")
+        ("duration", po::value<int>(), "set monitoring duration(in second) [default: infinit]")
         ;
 
     ///////  Check Arguments ///////////////////////////
     po::variables_map vmap;
-    po::store(po::parse_command_line(argc, argv, desc), vmap);
-    po::notify(vmap);
+    try{
+        po::store(po::parse_command_line(argc, argv, desc), vmap);
+        po::notify(vmap);
+    }catch(std::exception& e){
+        cerr << "Exception: " << e.what() << '\n';
+        return -1;
+    }
     if(vmap.count("help")){
         std::cout << desc;
         return 0;
@@ -66,7 +71,7 @@ int main(int argc, char* argv[])
     }
 
     ///////  Start Monitoring ///////////////////////////
-    long unit_div = (1<<10) / 8;
+    float unit_div = (1<<10) / 8;
     if(unit == Unit::KB) unit_div = (1<<10);
     else if(unit == Unit::MB) unit_div = (1<<20);
     else if(unit == Unit::GB) unit_div = (1<<30);
@@ -82,7 +87,7 @@ int main(int argc, char* argv[])
     while(true){
         string line;
         for(auto& nic : nics){
-            auto out = boost::format("%5s(rx:%-5u, tx:%-5u) ") 
+            auto out = boost::format("%5s(rx:%-5.3f, tx:%-5.3f) ") 
                         % nic.get_name()        
                         % (nic.get_rx() / unit_div)
                         % (nic.get_tx() / unit_div);
