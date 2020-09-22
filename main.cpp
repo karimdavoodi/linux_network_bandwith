@@ -2,6 +2,7 @@
 #include <thread> 
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
+#include <boost/filesystem.hpp>
 #include "net_bandwidth.hpp"
 
 using namespace std;
@@ -53,7 +54,8 @@ int main(int argc, char* argv[])
         }
     }else{
         for(const auto nic_str : System::get_interfaces()){
-            nics.emplace_back(nic_str);
+            if(boost::filesystem::exists("/sys/class/net/" + nic_str + "/device"))
+                nics.emplace_back(nic_str);
         }
     }
     if(vmap.count("period")){
@@ -69,20 +71,18 @@ int main(int argc, char* argv[])
     else if(unit == Unit::MB) unit_div = (1<<20);
     else if(unit == Unit::GB) unit_div = (1<<30);
     time_t now = time(NULL);
-    cout << "Montor Network Interfaces:"
-         << "\n\t Duration: " << duration
-         << "\n\t Period: " << period
-         << "\n\t Unit: " << unit_str[size_t(unit)]
-         << "\n\t UnitDiv: " << unit_div
-         << "\n\t NICs: ";
+    cout << "\nDuration: " << duration
+         << "\nPeriod: " << period
+         << "\nUnit: " << unit_str[size_t(unit)]
+         << "\nNICs: ";
     for(auto& nic : nics){
         cout << nic.get_name() << ' ';
     }
-    cout << endl;
+    cout << "\n------------------------------" << endl;
     while(true){
         string line;
         for(auto& nic : nics){
-            auto out = boost::format("%5s(rx:%5u, rx:%5u)  ") 
+            auto out = boost::format("%5s(rx:%-5u, tx:%-5u) ") 
                         % nic.get_name()        
                         % (nic.get_rx() / unit_div)
                         % (nic.get_tx() / unit_div);
